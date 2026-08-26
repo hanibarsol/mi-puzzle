@@ -873,10 +873,55 @@ body {
     var el = piece.el;
     var startX = 0, startY = 0, dx = 0, dy = 0;
 
+
+    /* The board sits above and the pieces below, so a piece often has to travel further than one
+       screen. A piece carries touch-action:none - without it the drag would not work at all - and
+       that also stops the page scrolling while a finger is on it, so the child was stuck: holding
+       a piece from the bottom row, unable to reach the board. Hani's daughter found it.
+
+       Holding a piece near the top or bottom edge now scrolls the page by itself, gently, and
+       faster the closer to the edge. The piece stays under the finger because the drag offset is
+       measured against the scroll position it started from, not only against the pointer. */
+    var startScroll = 0, lastX = 0, lastY = 0, edgeTimer = null;
+    var EDGE = 90, MAX_SPEED = 14;
+
+    function applyDrag() {
+      dx = lastX - startX;
+      dy = (lastY - startY) + (window.pageYOffset - startScroll);
+      el.style.transform = "translate(" + dx + "px," + dy + "px) rotate(0deg) scale(1.06)";
+    }
+
+    function stopEdgeScroll() {
+      if (edgeTimer) { cancelAnimationFrame(edgeTimer); edgeTimer = null; }
+    }
+
+    function edgeScroll(clientY) {
+      var h = window.innerHeight;
+      var speed = 0;
+      if (clientY < EDGE) speed = -MAX_SPEED * (1 - clientY / EDGE);
+      else if (clientY > h - EDGE) speed = MAX_SPEED * (1 - (h - clientY) / EDGE);
+
+      if (!speed) { stopEdgeScroll(); return; }
+      if (edgeTimer) return;
+
+      var step = function () {
+        var top = window.pageYOffset;
+        var max = document.documentElement.scrollHeight - window.innerHeight;
+        var next = Math.max(0, Math.min(max, top + speed));
+        if (next === top) { stopEdgeScroll(); return; }
+        window.scrollTo(0, next);
+        applyDrag();
+        edgeTimer = requestAnimationFrame(step);
+      };
+      edgeTimer = requestAnimationFrame(step);
+    }
+
     el.addEventListener("pointerdown", function (e) {
       if (piece.locked) return;
       el.setPointerCapture(e.pointerId);
       startX = e.clientX; startY = e.clientY;
+      startScroll = window.pageYOffset;
+      lastX = e.clientX; lastY = e.clientY;
       dx = 0; dy = 0;
       el.classList.add("dragging");
       el.style.animation = "none";
@@ -887,9 +932,9 @@ body {
 
     el.addEventListener("pointermove", function (e) {
       if (piece.locked || !el.classList.contains("dragging")) return;
-      dx = e.clientX - startX;
-      dy = e.clientY - startY;
-      el.style.transform = "translate(" + dx + "px," + dy + "px) rotate(0deg) scale(1.06)";
+      lastX = e.clientX; lastY = e.clientY;
+      applyDrag();
+      edgeScroll(e.clientY);
 
       var hoverIndex = hoveredCellIndex(el);
       if (piece.isBlank && hoverIndex === piece.index) {
@@ -906,6 +951,7 @@ body {
     function release(e) {
       if (piece.locked || !el.classList.contains("dragging")) return;
       el.classList.remove("dragging");
+      stopEdgeScroll();
       clearHighlight();
 
       var pieceRect = el.getBoundingClientRect();
