@@ -314,7 +314,14 @@ body {
 
 .frame {
   position: relative;
-  width: min(88vw, 480px);
+  /* The board is capped by the height of the screen as well as its width. On a phone it filled
+     the whole screen on its own and pushed every one of the sixteen pieces below the fold - the
+     child saw an empty board and no way to know there was anything under it. Measured on an
+     iPhone at 390x664: pieces began at 576, the screen ended at 664, nothing visible. Capped,
+     two full rows sit on screen from the start. 22rem is what the heading, the buttons and two
+     rows of pieces need; the 0.8 turns the height budget into a width, since the board is 4:5.
+     Wide screens never reach this cap and are untouched. */
+  width: min(88vw, 480px, calc((100vh - 22rem) * 0.8));
   aspect-ratio: 640 / 808;
   border-radius: 22px;
   overflow: hidden;
